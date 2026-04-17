@@ -1,0 +1,128 @@
+// NewsImpact Database Schema
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// User model for authentication
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  username  String   @unique
+  password  String   // bcrypt hashed
+  name      String?
+
+  // Subscription info
+  subscriptionTier String @default("free") // free, premium, enterprise
+  subscriptionStatus String @default("active") // active, cancelled, expired
+  subscriptionStartDate DateTime?
+  subscriptionEndDate DateTime?
+
+  // User preferences
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  lastLoginAt DateTime?
+
+  // Relations
+  articles Article[]
+  subscriptions Subscription[]
+  apiKeys ApiKey[]
+
+  @@index([email])
+  @@index([username])
+}
+
+// Subscription plans
+model Subscription {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  planType  String   // "premium", "annual", "enterprise"
+  price     Float
+  currency  String   @default("USD")
+
+  status    String   @default("active") // active, cancelled, expired
+
+  startDate DateTime @default(now())
+  endDate   DateTime?
+
+  stripeSubscriptionId String? @unique
+  stripeCustomerId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([stripeSubscriptionId])
+}
+
+// News articles with sentiment analysis
+model Article {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  title     String
+  content   String   @db.Text
+  source    String   // newsapi, guardian, yahoo
+  sourceUrl String
+  imageUrl  String?
+
+  // Sentiment analysis
+  sentiment String   // positive, negative, neutral
+  sentimentScore Float? // -1 to 1
+  confidence Float? // 0 to 1
+
+  // Impact on markets
+  affectedTickers String[] // ["AAPL", "MSFT"]
+  impactLevel String? // high, medium, low
+
+  publishedAt DateTime
+  savedAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([publishedAt])
+}
+
+// API keys for enterprise users
+model ApiKey {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  key       String   @unique
+  name      String
+
+  isActive  Boolean  @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  lastUsedAt DateTime?
+
+  @@index([userId])
+  @@index([key])
+}
+
+// Audit log for compliance
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  action    String   // login, logout, subscribe, purchase
+  resource  String   // user, subscription, article
+  resourceId String?
+  details   String   @db.Text
+
+  ipAddress String?
+  userAgent String?
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
+}
